@@ -14,9 +14,9 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     }
 
     @Override
-    public void create(Example example) {
+    public void create(Example entity) {
         base.request("application/json")
-                .post(Entity.entity(example, "application/json"));
+                .post(Entity.entity(entity, "application/json"));
     }
 
     @Override
@@ -27,9 +27,8 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     }
 
     @Override
-    public Example find(String exampleKey, String modParam) {
+    public Example find(String exampleKey) {
         return base.path(exampleKey)
-                .queryParam("modParam", modParam)
                 .request("application/json")
                 .get(Example.class);
     }
@@ -41,9 +40,37 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     }
 
     @Override
-    public void replace(String exampleKey, Example example) {
+    public Example findKitchenSink(String exampleKey, String modParam, String subKey, String otherParam) {
+        return base.path(exampleKey)
+                .path("text")
+                .path(subKey)
+                .queryParam("modParam", modParam)
+                .queryParam("otherParam", otherParam)
+                .request("application/json")
+                .get(Example.class);
+    }
+
+    @Override
+    public List<Example> postGenericReturn(Example entity) {
+        return base.request("application/json")
+                .post(Entity.entity(entity, "application/json"), new GenericType<List<Example>>(){});
+    }
+
+    @Override
+    public Example postKitchenSink(String exampleKey, String modParam, String subKey, String otherParam, Example entity) {
+        return base.path(exampleKey)
+                .path("text")
+                .path(subKey)
+                .queryParam("modParam", modParam)
+                .queryParam("otherParam", otherParam)
+                .request("application/json")
+                .post(Entity.entity(entity, "application/json"), Example.class);
+    }
+
+    @Override
+    public void replace(String exampleKey, Example entity) {
         base.path(exampleKey)
                 .request("application/json")
-                .put(Entity.entity(example, "application/json"));
+                .put(Entity.entity(entity, "application/json"));
     }
 }

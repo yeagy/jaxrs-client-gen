@@ -1,7 +1,9 @@
 package io.github.yeagy.jaxrs;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
 import java.util.List;
+import java.util.Set;
 
 @Path("example")
 @Produces("application/json")
@@ -29,9 +31,12 @@ public interface ExampleEndpoint {
     @GET
     @Path("{exampleKey}/text/{subKey}")
     Example findKitchenSink(@PathParam("exampleKey") String exampleKey,
+                            @HeaderParam("headParam") String headParam,
                             @QueryParam("modParam") String modParam,
                             @PathParam("subKey") String subKey,
-                            @QueryParam("otherParam") String otherParam);
+                            @MatrixParam("mtxParam") String mtxParam,
+                            @QueryParam("otherParam") String otherParam,
+                            @Context Example example);
 
 
     @POST
@@ -41,6 +46,16 @@ public interface ExampleEndpoint {
                             @PathParam("subKey") String subKey,
                             @QueryParam("otherParam") String otherParam,
                             Example example);
+
+    @POST
+    @Consumes("application/x-www-form-urlencoded")
+    @Path("{exampleKey}")
+    void postFormParams(@PathParam("exampleKey") String exampleKey,
+                        @FormParam("soloParam") String soloParam,
+                        @FormParam("longParam") long longParam,
+                        @FormParam("integerParam") Integer integerParam,
+                        @FormParam("listParams") List<String> listParams,
+                        @FormParam("setParams") Set<Integer> setParams);
 
     @POST
     List<Example> postGenericReturn(Example example);

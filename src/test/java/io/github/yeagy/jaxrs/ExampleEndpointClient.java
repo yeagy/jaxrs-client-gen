@@ -1,10 +1,13 @@
 package io.github.yeagy.jaxrs;
 
 import java.util.List;
+import java.util.Set;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.Form;
 import javax.ws.rs.core.GenericType;
+import javax.ws.rs.core.MultivaluedHashMap;
 
 public class ExampleEndpointClient implements ExampleEndpoint {
     private final WebTarget base;
@@ -40,14 +43,32 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     }
 
     @Override
-    public Example findKitchenSink(String exampleKey, String modParam, String subKey, String otherParam) {
+    public Example findKitchenSink(String exampleKey, String headParam, String modParam, String subKey, String mtxParam, String otherParam, Example context) {
         return base.path(exampleKey)
                 .path("text")
                 .path(subKey)
                 .queryParam("modParam", modParam)
+                .matrixParam("mtxParam", mtxParam)
                 .queryParam("otherParam", otherParam)
                 .request("application/json")
+                .header("headParam", headParam)
                 .get(Example.class);
+    }
+
+    @Override
+    public void postFormParams(String exampleKey, String soloParam, long longParam, Integer integerParam, List<String> listParams, Set<Integer> setParams) {
+        MultivaluedHashMap<String, String> mmap = new MultivaluedHashMap<String, String>();
+        mmap.add("soloParam", soloParam);
+        mmap.add("longParam", Long.toString(longParam));
+        mmap.add("integerParam", integerParam != null ? integerParam.toString() : null);
+        mmap.addAll("listParams", listParams);
+        for (Integer setParams_i : setParams) {
+            mmap.add("setParams", setParams_i != null ? setParams_i.toString() : null);
+        }
+        Form entity = new Form(mmap);
+        base.path(exampleKey)
+                .request("application/json")
+                .post(Entity.entity(entity, "application/x-www-form-urlencoded"));
     }
 
     @Override

@@ -2,6 +2,7 @@ package io.github.yeagy.jaxrs;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Cookie;
 import java.util.List;
 import java.util.Set;
 
@@ -36,6 +37,7 @@ public interface ExampleEndpoint {
                             @PathParam("subKey") String subKey,
                             @MatrixParam("mtxParam") String mtxParam,
                             @QueryParam("otherParam") String otherParam,
+                            @CookieParam("cookieParam") Cookie cookieParam,
                             @Context Example example);
 
 

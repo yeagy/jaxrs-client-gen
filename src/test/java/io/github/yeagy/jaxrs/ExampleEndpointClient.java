@@ -5,6 +5,7 @@ import java.util.Set;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.Form;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MultivaluedHashMap;
@@ -43,7 +44,7 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     }
 
     @Override
-    public Example findKitchenSink(String exampleKey, String headParam, String modParam, String subKey, String mtxParam, String otherParam, Example context) {
+    public Example findKitchenSink(String exampleKey, String headParam, String modParam, String subKey, String mtxParam, String otherParam, Cookie cookieParam, Example context) {
         return base.path(exampleKey)
                 .path("text")
                 .path(subKey)
@@ -52,6 +53,7 @@ public class ExampleEndpointClient implements ExampleEndpoint {
                 .queryParam("otherParam", otherParam)
                 .request("application/json")
                 .header("headParam", headParam)
+                .cookie(cookieParam)
                 .get(Example.class);
     }
 

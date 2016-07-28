@@ -61,4 +61,8 @@ public interface ExampleEndpoint {
 
     @POST
     List<Example> postGenericReturn(Example example);
+
+    @GET
+    @Path("{exampleKey}/text/{beanKey}")
+    Example findBeanParams(@PathParam("exampleKey") String exampleKey, @BeanParam ExampleBeanParam beanParam);
 }

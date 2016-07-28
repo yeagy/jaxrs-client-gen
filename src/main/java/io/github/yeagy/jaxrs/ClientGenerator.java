@@ -29,13 +29,17 @@ import javax.ws.rs.core.Form;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MultivaluedHashMap;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class ClientGenerator {
@@ -70,9 +74,17 @@ public class ClientGenerator {
 
         Kind kind;
         String label;
+        String call;
         Class<?> type;
         Type genericType;
-        Type[] genericTypeArgs;
+        List<ParamData> beanParams = new ArrayList<ParamData>();
+
+        Type[] getGenericTypeArgs(){
+            if (genericType != null && genericType instanceof ParameterizedType) {
+                return ((ParameterizedType) genericType).getActualTypeArguments();
+            }
+            return null;
+        }
     }
 
     public ClassData analyze(Class klass) {
@@ -120,45 +132,104 @@ public class ClientGenerator {
                 methodData.params.add(paramData);
                 paramData.type = method.getParameterTypes()[i];
                 paramData.genericType = method.getGenericParameterTypes()[i];
-                if(paramData.genericType instanceof ParameterizedType) {
-                    paramData.genericTypeArgs = ((ParameterizedType) paramData.genericType).getActualTypeArguments();
-                }
-                int contextCount = 0;
-                for (Annotation annotation : method.getParameterAnnotations()[i]) {
-                    if (annotation instanceof PathParam) {
-                        paramData.kind = ParamData.Kind.PATH;
-                        paramData.label = ((PathParam) annotation).value();
-                    } else if (annotation instanceof QueryParam) {
-                        paramData.kind = ParamData.Kind.QUERY;
-                        paramData.label = ((QueryParam) annotation).value();
-                    } else if (annotation instanceof Context) {
-                        paramData.kind = ParamData.Kind.CONTEXT;
-                        paramData.label = ++contextCount == 1 ? "context" : "context" + contextCount;
-                    } else if (annotation instanceof MatrixParam) {
-                        paramData.kind = ParamData.Kind.MATRIX;
-                        paramData.label = ((MatrixParam) annotation).value();
-                    } else if (annotation instanceof HeaderParam) {
-                        paramData.kind = ParamData.Kind.HEADER;
-                        paramData.label = ((HeaderParam) annotation).value();
-                    } else if (annotation instanceof FormParam) {
-                        paramData.kind = ParamData.Kind.FORM;
-                        paramData.label = ((FormParam) annotation).value();
-                        methodData.form = true;
-                    } else if (annotation instanceof CookieParam) {
-                        paramData.kind = ParamData.Kind.COOKIE;
-                        paramData.label = ((CookieParam) annotation).value();
-                    } else if (annotation instanceof BeanParam) {
-                        throw new UnsupportedOperationException("bean params not yet supported");
-                    }
-                }
+                handleParamAnnotations(methodData, paramData, method.getParameterAnnotations()[i]);
                 if (paramData.kind == null) {
                     paramData.kind = ParamData.Kind.ENTITY;
                     paramData.label = L_ENTITY;
                 }
+                paramData.call = paramData.label;
                 //todo multiple unrecognized?
             }
         }
         return classData;
+    }
+
+    private void handleParamAnnotations(MethodData methodData, ParamData paramData, Annotation[] annotations) {
+        int contextCount = 0;
+        int beanCount = 0;
+        for (Annotation annotation : annotations) {
+            if (annotation instanceof PathParam) {
+                paramData.kind = ParamData.Kind.PATH;
+                paramData.label = ((PathParam) annotation).value();
+            } else if (annotation instanceof QueryParam) {
+                paramData.kind = ParamData.Kind.QUERY;
+                paramData.label = ((QueryParam) annotation).value();
+            } else if (annotation instanceof Context) {
+                paramData.kind = ParamData.Kind.CONTEXT;
+                paramData.label = ++contextCount == 1 ? "context" : "context" + contextCount;
+            } else if (annotation instanceof MatrixParam) {
+                paramData.kind = ParamData.Kind.MATRIX;
+                paramData.label = ((MatrixParam) annotation).value();
+            } else if (annotation instanceof HeaderParam) {
+                paramData.kind = ParamData.Kind.HEADER;
+                paramData.label = ((HeaderParam) annotation).value();
+            } else if (annotation instanceof FormParam) {
+                paramData.kind = ParamData.Kind.FORM;
+                paramData.label = ((FormParam) annotation).value();
+                methodData.form = true;
+            } else if (annotation instanceof CookieParam) {
+                paramData.kind = ParamData.Kind.COOKIE;
+                paramData.label = ((CookieParam) annotation).value();
+            } else if (annotation instanceof BeanParam) {
+                paramData.kind = ParamData.Kind.BEAN;
+                paramData.label = ++beanCount == 1 ? "beanParam" : "beanParam" + beanCount;
+                paramData.call = paramData.label;
+                analyzeBeanParam(methodData, paramData);
+            }
+        }
+    }
+
+    private void analyzeBeanParam(MethodData methodData, ParamData beanParamData) {
+        for (Field field : beanParamData.type.getDeclaredFields()) {
+            ParamData paramData = new ParamData();
+            handleParamAnnotations(methodData, paramData, field.getDeclaredAnnotations());
+            if(paramData.kind != null){
+                findGetter(beanParamData, field.getName().toLowerCase(), paramData);
+                if(paramData.call == null && !java.lang.reflect.Modifier.isPrivate(field.getModifiers())){
+                    paramData.call = beanParamData.call + "." + paramData.label;
+                }
+                if(paramData.call != null){
+                    beanParamData.beanParams.add(paramData);
+                    paramData.type = field.getType();
+                    paramData.genericType = field.getGenericType();
+                }
+            }
+        }
+        for (Constructor<?> constructor : beanParamData.type.getDeclaredConstructors()) {
+            for (int i = 0; i < constructor.getParameterTypes().length; i++) {
+                ParamData paramData = new ParamData();
+                handleParamAnnotations(methodData, paramData, constructor.getParameterAnnotations()[i]);
+                if(paramData.kind != null){
+                    findGetter(beanParamData, paramData.label.toLowerCase(), paramData);
+                }
+                if(paramData.call == null){
+                    try {
+                        Field field = beanParamData.type.getDeclaredField(paramData.label);
+                        if(!java.lang.reflect.Modifier.isPrivate(field.getModifiers())){
+                            paramData.call = beanParamData.call + "." + paramData.label;
+                        }
+                    } catch (NoSuchFieldException e) {
+                        e.printStackTrace();//todo log
+                    }
+                }
+                if(paramData.call != null){
+                    beanParamData.beanParams.add(paramData);
+                    paramData.type = constructor.getParameterTypes()[i];
+                    paramData.genericType = constructor.getGenericParameterTypes()[i];
+                }
+            }
+        }
+    }
+
+    private void findGetter(ParamData beanParamData, String nameLower, ParamData paramData) {
+        for (Method method : beanParamData.type.getDeclaredMethods()) {
+            if (method.getParameterTypes().length == 0
+                    && (method.getName().startsWith("get") || method.getName().startsWith("is"))
+                    && method.getName().toLowerCase().endsWith(nameLower)) {
+                paramData.call = beanParamData.call + "." + method.getName() + "()";
+                break;
+            }
+        }
     }
 
     public JavaFile generate(Class klass) {
@@ -169,7 +240,7 @@ public class ClientGenerator {
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(Client.class, L_CLIENT)
                 .addParameter(String.class, L_ENDPOINT_URL)
-                .addStatement("$L = $L.target($L).path($S)", L_BASE, L_CLIENT, L_ENDPOINT_URL, classData.path)
+                .addStatement("$L = $L.target($L)", L_BASE, L_CLIENT, L_ENDPOINT_URL)
                 .build();
 
         TypeSpec.Builder typeSpecBuilder = TypeSpec.classBuilder(classData.className + "Client")
@@ -204,56 +275,89 @@ public class ClientGenerator {
         boolean voidReturn = methodData.returnType == void.class;
         boolean genericReturn = methodData.returnType instanceof ParameterizedType;
         switch (methodData.verb) {
-            case GET : get(builder, produces, statement, methodData.returnType, genericReturn); break;
-            case POST : post(builder, consumes, produces, statement, methodData.returnType, voidReturn, genericReturn); break;
-            case PUT : put(builder, consumes, produces, statement, methodData.returnType, voidReturn, genericReturn); break;
-            case DELETE : delete(builder, produces, statement, methodData.returnType, voidReturn, genericReturn); break;
+            case GET:
+                get(builder, produces, statement, methodData.returnType, genericReturn);
+                break;
+            case POST:
+                post(builder, consumes, produces, statement, methodData.returnType, voidReturn, genericReturn);
+                break;
+            case PUT:
+                put(builder, consumes, produces, statement, methodData.returnType, voidReturn, genericReturn);
+                break;
+            case DELETE:
+                delete(builder, produces, statement, methodData.returnType, voidReturn, genericReturn);
+                break;
         }
     }
 
     private void params(MethodSpec.Builder builder, MethodData methodData, StringBuilder statement) {
         StringBuilder requestParams = new StringBuilder(".request($S)\n");
         for (ParamData paramData : methodData.params) {
+            handleParam(statement, requestParams, paramData);
             builder.addParameter(paramData.genericType, paramData.label);
-            if (paramData.kind == ParamData.Kind.QUERY) {
-                statement.append(String.format(".queryParam(\"%s\", %s)\n", paramData.label, paramData.label));
-            } else if (paramData.kind == ParamData.Kind.MATRIX) {
-                statement.append(String.format(".matrixParam(\"%s\", %s)\n", paramData.label, paramData.label));
-            } else if (paramData.kind == ParamData.Kind.HEADER) {
-                requestParams.append(String.format(".header(\"%s\", %s)\n", paramData.label, paramData.label));
-            } else if (paramData.kind == ParamData.Kind.COOKIE) {
-                if(paramData.type == Cookie.class){
-                    requestParams.append(String.format(".cookie(%s)\n", paramData.label));
-                } else if(paramData.type == String.class) {
-                    requestParams.append(String.format(".cookie(\"%s\", %s)\n", paramData.label, paramData.label));
-                } else {
-                    throw new IllegalArgumentException("cookie parameter type not supported: " + paramData.label);
-                }
-            }
         }
         statement.append(requestParams);
     }
 
+    private void handleParam(StringBuilder statement, StringBuilder requestParams, ParamData paramData) {
+        switch (paramData.kind) {
+            case QUERY:
+                statement.append(String.format(".queryParam(\"%s\", %s)\n", paramData.label, paramData.call));
+                break;
+            case MATRIX:
+                statement.append(String.format(".matrixParam(\"%s\", %s)\n", paramData.label, paramData.call));
+                break;
+            case HEADER:
+                requestParams.append(String.format(".header(\"%s\", %s)\n", paramData.label, paramData.call));
+                break;
+            case COOKIE:
+                if (paramData.type == Cookie.class) {
+                    requestParams.append(String.format(".cookie(%s)\n", paramData.call));
+                } else if (paramData.type == String.class) {
+                    requestParams.append(String.format(".cookie(\"%s\", %s)\n", paramData.label, paramData.call));
+                } else {
+                    throw new IllegalArgumentException("cookie parameter type not supported: " + paramData.label);
+                }
+                break;
+            case BEAN:
+                for (ParamData beanParamData : paramData.beanParams) {
+                    handleParam(statement, requestParams, beanParamData);
+                }
+                break;
+        }
+    }
+
     private void pathing(String classPath, MethodData methodData, StringBuilder statement) {
-        List<String> pathParams = new ArrayList<String>();
+        Map<String, ParamData> paramByPath = new HashMap<String, ParamData>();
         for (ParamData param : methodData.params) {
-            if(param.kind == ParamData.Kind.PATH){
-                pathParams.add(param.label);
+            if (param.kind == ParamData.Kind.PATH) {
+                paramByPath.put(param.label, param);
+            }
+            for (ParamData beanParam : param.beanParams) {
+                if (beanParam.kind == ParamData.Kind.PATH) {
+                    paramByPath.put(beanParam.label, beanParam);
+                }
             }
         }
 
+        handlePath(classPath, statement, paramByPath);
         if (methodData.path != null) {
-            for (String part : methodData.path.split("/")) {
-                if (part.startsWith("{") && part.endsWith("}")) {
-                    String trimmed = part.substring(1, part.length() - 1);
-                    if (pathParams.contains(trimmed)) {
-                        statement.append(String.format(".path(%s)\n", trimmed));
-                    } else {
-                        throw new IllegalStateException("path param mismatch: " + trimmed);
-                    }
+            handlePath(methodData.path, statement, paramByPath);
+        }
+    }
+
+    private void handlePath(String path, StringBuilder statement, Map<String, ParamData> paramByPath) {
+        for (String part : path.split("/")) {
+            if (part.startsWith("{") && part.endsWith("}")) {
+                String trimmed = part.substring(1, part.length() - 1);
+                ParamData paramData = paramByPath.get(trimmed);
+                if (paramData != null) {
+                    statement.append(String.format(".path(%s)\n", paramData.call));
                 } else {
-                    statement.append(String.format(".path(\"%s\")\n", part));
+                    throw new IllegalStateException("path param mismatch: " + trimmed);
                 }
+            } else {
+                statement.append(String.format(".path(\"%s\")\n", part));
             }
         }
     }
@@ -262,11 +366,18 @@ public class ClientGenerator {
         if (methodData.form) {
             builder.addStatement("$T<String, String> mmap = new MultivaluedHashMap<String, String>()", MultivaluedHashMap.class);
             for (ParamData paramData : methodData.params) {
-                if(paramData.kind == ParamData.Kind.FORM) {
+                if (paramData.kind == ParamData.Kind.FORM) {
                     if (List.class.isAssignableFrom(paramData.type)) {
-                        builder.addStatement("mmap.addAll($S, $L)", paramData.label, paramData.label);//todo String handle
+                        Type setType = paramData.getGenericTypeArgs()[0];
+                        if (setType == String.class) {
+                            builder.addStatement("mmap.addAll($S, $L)", paramData.label, paramData.label);
+                        } else {
+                            builder.beginControlFlow("for ($T $L_i : $L)", setType, paramData.label, paramData.label);
+                            builder.addStatement("mmap.add($S, $L_i != null ? $L_i.toString() : null)", paramData.label, paramData.label, paramData.label);
+                            builder.endControlFlow();
+                        }
                     } else if (Set.class.isAssignableFrom(paramData.type)) {
-                        Type setType = paramData.genericTypeArgs[0];
+                        Type setType = paramData.getGenericTypeArgs()[0];
                         if (setType == String.class) {
                             builder.addStatement("mmap.addAll($S, new $T<$T>($L))", paramData.label, ArrayList.class, setType, paramData.label);
                         } else {

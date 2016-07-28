@@ -14,38 +14,55 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     private final WebTarget base;
 
     public ExampleEndpointClient(Client client, String endpointUrl) {
-        base = client.target(endpointUrl).path("example");
+        base = client.target(endpointUrl);
     }
 
     @Override
     public void create(Example entity) {
-        base.request("application/json")
+        base.path("example")
+                .request("application/json")
                 .post(Entity.entity(entity, "application/json"));
     }
 
     @Override
     public void delete(String exampleKey) {
-        base.path(exampleKey)
+        base.path("example")
+                .path(exampleKey)
                 .request("application/json")
                 .delete();
     }
 
     @Override
     public Example find(String exampleKey) {
-        return base.path(exampleKey)
+        return base.path("example")
+                .path(exampleKey)
                 .request("application/json")
                 .get(Example.class);
     }
 
     @Override
     public List<Example> findAll() {
-        return base.request("application/json")
+        return base.path("example")
+                .request("application/json")
                 .get(new GenericType<List<Example>>(){});
     }
 
     @Override
+    public Example findBeanParams(String exampleKey, ExampleBeanParam beanParam) {
+        return base.path("example")
+                .path(exampleKey)
+                .path("text")
+                .path(beanParam.getBeanPath())
+                .queryParam("fieldQuery", beanParam.fieldQuery)
+                .matrixParam("constructorMatrix", beanParam.getConstructorMatrix())
+                .request("application/json")
+                .get(Example.class);
+    }
+
+    @Override
     public Example findKitchenSink(String exampleKey, String headParam, String modParam, String subKey, String mtxParam, String otherParam, Cookie cookieParam, Example context) {
-        return base.path(exampleKey)
+        return base.path("example")
+                .path(exampleKey)
                 .path("text")
                 .path(subKey)
                 .queryParam("modParam", modParam)
@@ -68,20 +85,23 @@ public class ExampleEndpointClient implements ExampleEndpoint {
             mmap.add("setParams", setParams_i != null ? setParams_i.toString() : null);
         }
         Form entity = new Form(mmap);
-        base.path(exampleKey)
+        base.path("example")
+                .path(exampleKey)
                 .request("application/json")
                 .post(Entity.entity(entity, "application/x-www-form-urlencoded"));
     }
 
     @Override
     public List<Example> postGenericReturn(Example entity) {
-        return base.request("application/json")
+        return base.path("example")
+                .request("application/json")
                 .post(Entity.entity(entity, "application/json"), new GenericType<List<Example>>(){});
     }
 
     @Override
     public Example postKitchenSink(String exampleKey, String modParam, String subKey, String otherParam, Example entity) {
-        return base.path(exampleKey)
+        return base.path("example")
+                .path(exampleKey)
                 .path("text")
                 .path(subKey)
                 .queryParam("modParam", modParam)
@@ -92,7 +112,8 @@ public class ExampleEndpointClient implements ExampleEndpoint {
 
     @Override
     public void replace(String exampleKey, Example entity) {
-        base.path(exampleKey)
+        base.path("example")
+                .path(exampleKey)
                 .request("application/json")
                 .put(Entity.entity(entity, "application/json"));
     }

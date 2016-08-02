@@ -3,6 +3,7 @@ package io.github.yeagy.jaxrs;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Cookie;
+import javax.ws.rs.core.Response;
 import java.util.List;
 import java.util.Set;
 
@@ -10,6 +11,7 @@ import java.util.Set;
 @Produces("application/json")
 @Consumes("application/json")
 public interface ExampleEndpoint {
+    Example nonJaxrsMethod(String key, long value);
 
     @GET
     List<Example> findAll();
@@ -18,7 +20,7 @@ public interface ExampleEndpoint {
     void create(Example example);
 
     @GET
-    @Path("{exampleKey}")
+    @Path("{exampleKey: [a-z]+}")
     Example find(@PathParam("exampleKey") String exampleKey);
 
     @PUT
@@ -64,5 +66,5 @@ public interface ExampleEndpoint {
 
     @GET
     @Path("{exampleKey}/text/{beanKey}")
-    Example findBeanParams(@PathParam("exampleKey") String exampleKey, @BeanParam ExampleBeanParam beanParam);
+    Response findBeanParams(@PathParam("exampleKey") String exampleKey, @BeanParam ExampleBeanParam beanParam);
 }

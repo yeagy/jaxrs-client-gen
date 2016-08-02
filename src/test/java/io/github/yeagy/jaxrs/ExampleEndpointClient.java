@@ -9,6 +9,7 @@ import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.Form;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MultivaluedHashMap;
+import javax.ws.rs.core.Response;
 
 public class ExampleEndpointClient implements ExampleEndpoint {
     private final WebTarget base;
@@ -48,7 +49,7 @@ public class ExampleEndpointClient implements ExampleEndpoint {
     }
 
     @Override
-    public Example findBeanParams(String exampleKey, ExampleBeanParam beanParam) {
+    public Response findBeanParams(String exampleKey, ExampleBeanParam beanParam) {
         return base.path("example")
                 .path(exampleKey)
                 .path("text")
@@ -56,7 +57,7 @@ public class ExampleEndpointClient implements ExampleEndpoint {
                 .queryParam("fieldQuery", beanParam.fieldQuery)
                 .matrixParam("constructorMatrix", beanParam.getConstructorMatrix())
                 .request("application/json")
-                .get(Example.class);
+                .get();
     }
 
     @Override
@@ -72,6 +73,11 @@ public class ExampleEndpointClient implements ExampleEndpoint {
                 .header("headParam", headParam)
                 .cookie(cookieParam)
                 .get(Example.class);
+    }
+
+    @Override
+    public Example nonJaxrsMethod(String param0, long param1) {
+        return null;
     }
 
     @Override

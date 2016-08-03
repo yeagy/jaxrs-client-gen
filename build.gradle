@@ -1,10 +1,25 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'io.codearte.gradle.nexus:gradle-nexus-staging-plugin:0.5.3'
+    }
+}
+
+plugins {
+    id 'com.bmuschko.nexus' version '2.3.1'
+    id 'us.kirchmeier.capsule' version '1.0.2'
+}
+apply plugin: 'java'
+apply plugin: 'io.codearte.nexus-staging'
+
 group = 'io.github.yeagy'
 version = '0.1.0'
 
-
-apply plugin: 'java'
-
 sourceCompatibility = '1.6'
+
+project.capsule.version = '1.0.2'
 
 repositories {
     mavenLocal()
@@ -18,4 +33,43 @@ dependencies {
     compile 'args4j:args4j:2.33'
 
     testCompile 'junit:junit:4.12'
+}
+
+task makeCapsule(type: MavenCapsule) {
+    applicationClass 'io.github.yeagy.jaxrs.CLI'
+    reallyExecutable
+}
+
+artifacts {
+    archives makeCapsule
+}
+
+assemble.dependsOn makeCapsule
+
+modifyPom {
+    project {
+        name 'jaxrs-client-gen'
+        description 'generate JAX-RS resourec client java source files'
+        url 'https://github.com/yeagy/jaxrs-client-gen'
+
+        scm {
+            url 'https://github.com/yeagy/jaxrs-client-gen'
+            connection 'scm:https://github.com/yeagy/jaxrs-client-gen.git'
+            developerConnection 'scm:git://github.com/yeagy/jaxrs-client-gen.git'
+        }
+
+        licenses {
+            license {
+                name 'The MIT License (MIT)'
+                url 'https://opensource.org/licenses/mit-license.php'
+            }
+        }
+
+        developers {
+            developer {
+                name 'Chris Yeagy'
+                email 'cyeagy@gmail.com'
+            }
+        }
+    }
 }

@@ -5,61 +5,33 @@ import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeSpec;
-import org.kohsuke.args4j.Argument;
-import org.kohsuke.args4j.CmdLineException;
-import org.kohsuke.args4j.CmdLineParser;
-import org.kohsuke.args4j.Option;
 
 import javax.lang.model.element.Modifier;
-import javax.ws.rs.BeanParam;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.CookieParam;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.FormParam;
-import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
-import javax.ws.rs.MatrixParam;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.Form;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.Response;
-import java.io.File;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Future;
 
+import static io.github.yeagy.jaxrs.ResourceAnalyzer.*;
+
 public class ClientGenerator {
     private static final String L_BASE = "base";
     private static final String L_CLIENT = "client";
     private static final String L_ENDPOINT_URL = "endpointUrl";
-    private static final String L_ENTITY = "entity";
+    private static final String L_ENTITY = ResourceAnalyzer.ENTITY;
 
     private final boolean async;
 
@@ -69,96 +41,6 @@ public class ClientGenerator {
 
     public ClientGenerator(boolean async) {
         this.async = async;
-    }
-
-    private static class CLI {
-        @Option(name = "-async", usage = "create an asynchronous client from a class resource")
-        private boolean async = false;
-
-        @Argument
-        private List<File> paths = new ArrayList<File>();
-
-        public CLI(String[] args) throws CmdLineException {
-            CmdLineParser parser = new CmdLineParser(this);
-            parser.parseArgument(args);
-        }
-
-        private void generate() throws ClassNotFoundException, IOException {
-            ClientGenerator generator = new ClientGenerator(async);
-            for (File path : paths) {
-                if(path.isDirectory()) {
-                    File[] files = path.listFiles(new FilenameFilter() {
-                        @Override
-                        public boolean accept(File dir, String name) {
-                            return name.endsWith(".class");
-                        }
-                    });
-                    for (File file : files) {
-                        fromFile(generator, file);
-                    }
-                } else {
-                    fromFile(generator, path);
-                }
-            }
-        }
-
-        private static final String[] COMMON_ROOT_PACKAGES = new String[]{"com", "net", "org", "io"};
-
-        private void fromFile(ClientGenerator generator, File file) throws IOException {
-            String fileName = file.getName();
-            if(fileName.endsWith(".class")){
-                String path = file.getPath();
-                Class<?> klass = null;
-                //try to shortcut with common package roots
-                for (String root : COMMON_ROOT_PACKAGES) {
-                    int idx = path.indexOf(root);
-                    if(idx > 0){
-                        String prefix = path.substring(0, idx - 1);
-                        String className = path.substring(idx, path.length() - 6).replace('/', '.');
-                        klass = loadClass(prefix, className);
-                    } else if(idx == 0){
-                        klass = loadClass("", path.replace('/', '.'));
-                    }
-                }
-                //try to work backwards through the path
-                int idx = path.lastIndexOf('/');
-                while(klass == null && idx > 0) {
-                    String prefix = path.substring(0, idx);
-                    String className = path.substring(idx + 1, path.length() - 6).replace('/', '.');
-                    klass = loadClass(prefix, className);
-                    if(klass == null){
-                        //try again
-                        idx = prefix.lastIndexOf('/');
-                    }
-                }
-                //maybe we are at the package root
-                if(klass == null && idx < 0){
-                    klass = loadClass("", path.replace('/', '.'));
-                }
-                if(klass != null) {
-                    Path pathAnnotation = klass.getAnnotation(Path.class);
-                    if (pathAnnotation != null) {
-                        JavaFile javaFile = generator.generate(klass);
-                        File newFile = new File("jaxrs-client-gen");
-                        javaFile.writeTo(newFile);
-                    }
-                }
-            }
-        }
-
-        private Class<?> loadClass(String path, String className) throws MalformedURLException {
-            URLClassLoader classLoader = new URLClassLoader(new URL[]{new File(path).toURI().toURL()});
-            try {
-                return classLoader.loadClass(className);
-            } catch (Throwable e) {
-            }
-            return null;
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        CLI cli = new CLI(args);
-        cli.generate();
     }
 
     /**
@@ -451,269 +333,6 @@ public class ClientGenerator {
         } else {
             String stmt = String.format("return $L%s.put($T.entity($L, $L), $T.class)", statement);
             builder.addStatement(stmt, L_BASE, produces, Entity.class, L_ENTITY, consumes, returnType);
-        }
-    }
-
-    static class ResourceAnalyzer {
-        /**
-         * Extracts the JAX-RS metadata from a class via reflection.
-         *
-         * @param klass JAX-RS resource
-         * @return metadata describing a JAX-RS resource
-         */
-        ClassData analyze(Class klass) {
-            List<ParamData> classParamDataList = new ArrayList<ParamData>();
-            Method[] methods = klass.getDeclaredMethods();
-            Arrays.sort(methods, new Comparator<Method>() {
-                @Override
-                public int compare(Method l, Method r) {
-                    return l.getName().compareTo(r.getName());
-                }
-            });
-            List<MethodData> methodDataList = new ArrayList<MethodData>();
-            for (Method method : methods) {
-                String path = null;
-                String[] consumes = null, produces = null;
-                MethodData.Verb verb = null;
-                for (Annotation annotation : method.getDeclaredAnnotations()) {
-                    if (annotation instanceof Path) {
-                        path = ((Path) annotation).value();
-                    } else if (annotation instanceof Consumes) {
-                        consumes = ((Consumes) annotation).value();
-                    } else if (annotation instanceof Produces) {
-                        produces = ((Produces) annotation).value();
-                    } else if (annotation instanceof GET) {
-                        verb = MethodData.Verb.GET;
-                    } else if (annotation instanceof POST) {
-                        verb = MethodData.Verb.POST;
-                    } else if (annotation instanceof PUT) {
-                        verb = MethodData.Verb.PUT;
-                    } else if (annotation instanceof DELETE) {
-                        verb = MethodData.Verb.DELETE;
-                    }
-                }
-
-                List<ParamData> paramDataList = new ArrayList<ParamData>();
-                for (int i = 0; i < method.getParameterTypes().length; i++) {
-                    ParamData paramData = new ParamData();
-                    paramData.type = method.getParameterTypes()[i];
-                    paramData.genericType = method.getGenericParameterTypes()[i];
-                    handleParamAnnotations(paramData, method.getParameterAnnotations()[i]);
-                    if (paramData.kind == null) {//todo ensure only single unannotated parameter for entity
-                        paramData.kind = ParamData.Kind.ENTITY;
-                        paramData.label = L_ENTITY;
-                    }
-                    paramData.call = paramData.label;
-                    paramDataList.add(paramData);
-                }
-
-                if (verb == null && method.getName().startsWith("set") && method.getParameterTypes().length == 1) {
-                    ParamData paramData = new ParamData();
-                    paramData.type = paramDataList.get(0).type;
-                    paramData.genericType = paramDataList.get(0).genericType;
-                    handleParamAnnotations(paramData, method.getDeclaredAnnotations());
-                    if (paramData.kind != null) {
-                        paramData.call = paramData.label;
-                        classParamDataList.add(paramData);
-                    }
-                }
-
-                methodDataList.add(new MethodData(method.getName(), method.getGenericReturnType(), path, consumes, produces, verb, paramDataList));
-            }
-
-            for (Field field : klass.getDeclaredFields()) {
-                ParamData paramData = new ParamData();
-                paramData.type = field.getType();
-                paramData.genericType = field.getGenericType();
-                handleParamAnnotations(paramData, field.getDeclaredAnnotations());
-                if (paramData.kind != null) {
-                    paramData.call = paramData.label;
-                    classParamDataList.add(paramData);
-                }
-            }
-            for (Constructor constructor : klass.getDeclaredConstructors()) {
-                for (int i = 0; i < constructor.getParameterTypes().length; i++) {
-                    ParamData paramData = new ParamData();
-                    paramData.type = constructor.getParameterTypes()[i];
-                    paramData.genericType = constructor.getGenericParameterTypes()[i];
-                    handleParamAnnotations(paramData, constructor.getParameterAnnotations()[i]);
-                    if (paramData.kind != null) {
-                        paramData.call = paramData.label;
-                        classParamDataList.add(paramData);
-                    }
-                }
-            }
-
-            Consumes consumes = (Consumes) klass.getAnnotation(Consumes.class);
-            Produces produces = (Produces) klass.getAnnotation(Produces.class);
-            return new ClassData(klass.isInterface(), klass.getSimpleName(),
-                    ((Path) klass.getAnnotation(Path.class)).value(),
-                    consumes != null ? consumes.value() : new String[]{"*/*"},
-                    produces != null ? produces.value() : new String[]{"*/*"},
-                    methodDataList, classParamDataList);
-        }
-
-        private void handleParamAnnotations(ParamData paramData, Annotation[] annotations) {
-            int contextCount = 0;
-            int beanCount = 0;
-            for (Annotation annotation : annotations) {
-                if (annotation instanceof PathParam) {
-                    paramData.kind = ParamData.Kind.PATH;
-                    paramData.label = ((PathParam) annotation).value();
-                } else if (annotation instanceof QueryParam) {
-                    paramData.kind = ParamData.Kind.QUERY;
-                    paramData.label = ((QueryParam) annotation).value();
-                } else if (annotation instanceof Context) {
-                    paramData.kind = ParamData.Kind.CONTEXT;
-                    paramData.label = ++contextCount == 1 ? "context" : "context" + contextCount;
-                } else if (annotation instanceof MatrixParam) {
-                    paramData.kind = ParamData.Kind.MATRIX;
-                    paramData.label = ((MatrixParam) annotation).value();
-                } else if (annotation instanceof HeaderParam) {
-                    paramData.kind = ParamData.Kind.HEADER;
-                    paramData.label = ((HeaderParam) annotation).value();
-                } else if (annotation instanceof FormParam) {
-                    paramData.kind = ParamData.Kind.FORM;
-                    paramData.label = ((FormParam) annotation).value();
-                } else if (annotation instanceof CookieParam) {
-                    paramData.kind = ParamData.Kind.COOKIE;
-                    paramData.label = ((CookieParam) annotation).value();
-                } else if (annotation instanceof BeanParam) {
-                    paramData.kind = ParamData.Kind.BEAN;
-                    paramData.label = ++beanCount == 1 ? "beanParam" : "beanParam" + beanCount;
-                    paramData.call = paramData.label;
-                    analyzeBeanParam(paramData);
-                }
-            }
-        }
-
-        private void analyzeBeanParam(ParamData beanParamData) {
-            for (Field field : beanParamData.type.getDeclaredFields()) {
-                ParamData paramData = new ParamData();
-                paramData.type = field.getType();
-                paramData.genericType = field.getGenericType();
-                handleParamAnnotations(paramData, field.getDeclaredAnnotations());
-                if (paramData.kind != null) {
-                    findGetter(beanParamData, field.getName().toLowerCase(), paramData);
-                    if (paramData.call == null && !java.lang.reflect.Modifier.isPrivate(field.getModifiers())) {
-                        paramData.call = beanParamData.call + "." + paramData.label;
-                    }
-                    if (paramData.call != null) {
-                        beanParamData.beanParams.add(paramData);
-                    }
-                }
-            }
-            for (Constructor<?> constructor : beanParamData.type.getDeclaredConstructors()) {
-                for (int i = 0; i < constructor.getParameterTypes().length; i++) {
-                    ParamData paramData = new ParamData();
-                    paramData.type = constructor.getParameterTypes()[i];
-                    paramData.genericType = constructor.getGenericParameterTypes()[i];
-                    handleParamAnnotations(paramData, constructor.getParameterAnnotations()[i]);
-                    if (paramData.kind != null) {
-                        findGetter(beanParamData, paramData.label.toLowerCase(), paramData);
-                    }
-                    if (paramData.call == null) {
-                        try {
-                            Field field = beanParamData.type.getDeclaredField(paramData.label);
-                            if (!java.lang.reflect.Modifier.isPrivate(field.getModifiers())) {
-                                paramData.call = beanParamData.call + "." + paramData.label;
-                            }
-                        } catch (NoSuchFieldException e) {
-                            throw new RuntimeException("bug!", e);
-                        }
-                    }
-                    if (paramData.call != null) {
-                        beanParamData.beanParams.add(paramData);
-                    }
-                }
-            }
-        }
-
-        private void findGetter(ParamData beanParamData, String nameLower, ParamData paramData) {
-            for (Method method : beanParamData.type.getDeclaredMethods()) {
-                if (method.getParameterTypes().length == 0
-                        && (method.getName().startsWith("get") || method.getName().startsWith("is"))
-                        && method.getName().toLowerCase().endsWith(nameLower)) {
-                    paramData.call = beanParamData.call + "." + method.getName() + "()";
-                    break;
-                }
-            }
-        }
-
-    }
-
-
-    static class ClassData {
-        final boolean iface;
-        final String className;
-        final String path;
-        final String[] consumes;
-        final String[] produces;
-        final List<MethodData> methods;
-        final List<ParamData> params;
-
-        ClassData(boolean iface, String className, String path, String[] consumes, String[] produces, List<MethodData> methods, List<ParamData> params) {
-            this.iface = iface;
-            this.className = className;
-            this.path = path;
-            this.consumes = consumes;
-            this.produces = produces;
-            this.methods = methods;
-            this.params = params;
-        }
-    }
-
-    static class MethodData {
-        enum Verb {GET, POST, PUT, DELETE}
-
-        final String methodName;
-        final Type returnType;
-        final String path;
-        final String[] consumes;
-        final String[] produces;
-        final Verb verb;
-        final List<ParamData> params;
-        final boolean form;
-
-        MethodData(String methodName, Type returnType, String path, String[] consumes, String[] produces, Verb verb, List<ParamData> params) {
-            this.methodName = methodName;
-            this.returnType = returnType;
-            this.path = path;
-            this.consumes = consumes;
-            this.produces = produces;
-            this.verb = verb;
-            this.params = params;
-            this.form = hasFormParam(params);
-        }
-
-        private boolean hasFormParam(List<ParamData> params) {
-            for (ParamData param : params) {
-                if (param.kind == ParamData.Kind.FORM) {
-                    return true;
-                } else if (param.kind == ParamData.Kind.BEAN) {
-                    return hasFormParam(param.beanParams);
-                }
-            }
-            return false;
-        }
-    }
-
-    //making this class immutable just makes things ugly...
-    static class ParamData {
-        enum Kind {PATH, QUERY, MATRIX, FORM, HEADER, COOKIE, BEAN, CONTEXT, ENTITY}
-
-        Class<?> type;
-        Type genericType;
-        Kind kind;
-        String label;
-        String call;
-        List<ParamData> beanParams = new ArrayList<ParamData>();
-
-        Type[] getGenericTypeArgs() {
-            if (genericType != null && genericType instanceof ParameterizedType) {
-                return ((ParameterizedType) genericType).getActualTypeArguments();
-            }
-            return null;
         }
     }
 }

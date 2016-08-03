@@ -1,3 +1,7 @@
+group = 'io.github.yeagy'
+version = '0.1.0'
+
+
 apply plugin: 'java'
 
 sourceCompatibility = '1.6'
@@ -11,11 +15,7 @@ repositories {
 dependencies {
     compile 'com.squareup:javapoet:1.7.0'
     compile 'javax.ws.rs:javax.ws.rs-api:2.0.1'
+    compile 'args4j:args4j:2.33'
 
     testCompile 'junit:junit:4.12'
-
 }
-
-//tasks.withType(JavaCompile) {
-//    options.compilerArgs << "-parameters"
-//}

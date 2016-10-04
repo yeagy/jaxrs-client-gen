@@ -11,7 +11,7 @@ Handles both classes and interfaces with JAX-RS resource annotations. Class deri
 <dependency>
   <groupId>io.github.yeagy</groupId>
   <artifactId>jaxrs-client-gen</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 ```
 
@@ -25,11 +25,11 @@ A directory will be created named 'jaxrs-client-gen' which will contain all the 
 
 Here is an example that will generate sources from the test classes of this project:
 ```bash
-java -jar build/libs/jaxrs-client-gen-0.1.0-capsule.jar -async build/classes/test
+java -jar build/libs/jaxrs-client-gen-0.1.1-capsule.jar -async build/classes/test
 ```
 On UNIX like systems the jar is self-executing:
 ```bash
-build/libs/jaxrs-client-gen-0.1.0-capsule.jar -async .
+build/libs/jaxrs-client-gen-0.1.1-capsule.jar -async build/classes/test
 ```
 Afterwards you can copy the generated sources into your source tree:
 ```bash
@@ -44,8 +44,8 @@ cp -r jaxrs-client-gen/* src/main/java/.
 class MyBeanParam{
     private String example;
     //any annotation value other than "example" would fail in this case.
-    public MyBeanParam(@QueryParam("example") String example){
-        this.example = example;
+    public MyBeanParam(@QueryParam("example") String foo){
+        this.example = foo;
     }
     public String getExample(){
         return example;

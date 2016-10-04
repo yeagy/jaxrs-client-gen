@@ -215,15 +215,15 @@ public class ResourceAnalyzer {
     }
 
     public static class ClassData {
-        final boolean iface;
-        final String className;
-        final String path;
-        final String[] consumes;
-        final String[] produces;
-        final List<MethodData> methods;
-        final List<ParamData> params;
+        public final boolean iface;
+        public final String className;
+        public final String path;
+        public final String[] consumes;
+        public final String[] produces;
+        public final List<MethodData> methods;
+        public final List<ParamData> params;
 
-        ClassData(boolean iface, String className, String path, String[] consumes, String[] produces, List<MethodData> methods, List<ParamData> params) {
+        public ClassData(boolean iface, String className, String path, String[] consumes, String[] produces, List<MethodData> methods, List<ParamData> params) {
             this.iface = iface;
             this.className = className;
             this.path = path;
@@ -235,18 +235,18 @@ public class ResourceAnalyzer {
     }
 
     public static class MethodData {
-        enum Verb {GET, POST, PUT, DELETE}
+        public enum Verb {GET, POST, PUT, DELETE}
 
-        final String methodName;
-        final Type returnType;
-        final String path;
-        final String[] consumes;
-        final String[] produces;
-        final Verb verb;
-        final List<ParamData> params;
-        final boolean form;
+        public final String methodName;
+        public final Type returnType;
+        public final String path;
+        public final String[] consumes;
+        public final String[] produces;
+        public final Verb verb;
+        public final List<ParamData> params;
+        public final boolean form;
 
-        MethodData(String methodName, Type returnType, String path, String[] consumes, String[] produces, Verb verb, List<ParamData> params) {
+        public MethodData(String methodName, Type returnType, String path, String[] consumes, String[] produces, Verb verb, List<ParamData> params) {
             this.methodName = methodName;
             this.returnType = returnType;
             this.path = path;
@@ -271,16 +271,16 @@ public class ResourceAnalyzer {
 
     //making this class immutable just makes things ugly...
     public static class ParamData {
-        enum Kind {PATH, QUERY, MATRIX, FORM, HEADER, COOKIE, BEAN, CONTEXT, ENTITY}
+        public enum Kind {PATH, QUERY, MATRIX, FORM, HEADER, COOKIE, BEAN, CONTEXT, ENTITY}
 
-        Class<?> type;
-        Type genericType;
-        Kind kind;
-        String label;
-        String call;
-        List<ParamData> beanParams = new ArrayList<ParamData>();
+        public Class<?> type;
+        public Type genericType;
+        public Kind kind;
+        public String label;
+        public String call;
+        public List<ParamData> beanParams = new ArrayList<ParamData>();
 
-        Type[] getGenericTypeArgs() {
+        public Type[] getGenericTypeArgs() {
             if (genericType != null && genericType instanceof ParameterizedType) {
                 return ((ParameterizedType) genericType).getActualTypeArguments();
             }

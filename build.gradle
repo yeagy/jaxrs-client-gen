@@ -15,7 +15,7 @@ apply plugin: 'java'
 apply plugin: 'io.codearte.nexus-staging'
 
 group = 'io.github.yeagy'
-version = '0.1.0'
+version = '0.1.1'
 
 sourceCompatibility = '1.6'
 

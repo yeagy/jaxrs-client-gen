@@ -1,102 +1,107 @@
 package io.github.yeagy.jaxrs;
 
-import com.squareup.javapoet.JavaFile;
 import org.kohsuke.args4j.Argument;
-import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import javax.ws.rs.Path;
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 class CLI {
-    @Option(name = "-async", usage = "create an asynchronous client from a class resource")
-    private boolean async = false;
+    private static class Args {
+        @Option(name = "-async", usage = "Create an asynchronous client from a class resource")
+        private boolean async = false;
 
-    @Argument(required = true, usage = "paths of classes, space separated. Can be a class file, a jar, or a directory (recursively searched).")
-    private List<File> paths = new ArrayList<File>();
+        @Option(name = "-cp", usage = "Semicolon separated classpath entries. Same rules as java. Can be a directory, jar, or wildcard for dir of jars (not recursively searched).")
+        private String classpath = null;
 
-    private final ClientGenerator generator;
-
-    public CLI(String[] args) throws CmdLineException {
-        CmdLineParser parser = new CmdLineParser(this);
-        parser.parseArgument(args);
-        generator = new ClientGenerator(async);
+        @Argument(required = true, usage = "Space separated paths. Can be a class file, a jar, or a directory (recursively searched).")
+        private List<File> paths = new ArrayList<File>();
     }
 
-    public static void main(String[] args) throws Exception {
+    private static final String[] COMMON_ROOT_PACKAGES = new String[]{"com", "net", "org", "io"};
+    private static final File OUTPUT_DIR = new File("jaxrs-client-gen");
+
+    private final Args args;
+    private final ClientGenerator generator;
+    private final ClassLoader parentLoader;
+
+    private CLI(Args args) throws MalformedURLException {
+        this.args = args;
+        generator = new ClientGenerator(args.async);
+        parentLoader = getParentClassloader();
+    }
+
+    private ClassLoader getParentClassloader() throws MalformedURLException {
+        if (args.classpath != null) {
+            List<URL> urls = new ArrayList<URL>();
+            for (String cp : args.classpath.split(";")) {
+                if (cp.endsWith("*")) {
+                    File dir = new File(cp.substring(0, cp.length() - 1));
+                    File[] jars = dir.listFiles(new FilenameFilter() {
+                        @Override
+                        public boolean accept(File dir, String name) {
+                            return name.endsWith(".jar");
+                        }
+                    });
+                    if (jars != null) {
+                        for (File jar : jars) {
+                            urls.add(jar.toURI().toURL());
+                        }
+                    }
+                } else {
+                    urls.add(new File(cp).toURI().toURL());
+                }
+            }
+            return new URLClassLoader(urls.toArray(new URL[urls.size()]), getClass().getClassLoader());
+        }
+        return getClass().getClassLoader();
+    }
+
+    public static void main(String[] input) throws Exception {
+        Args args = new Args();
+        CmdLineParser parser = new CmdLineParser(args);
+        parser.parseArgument(input);
         CLI cli = new CLI(args);
         cli.generate();
     }
 
     private void generate() throws ClassNotFoundException, IOException {
-        for (File path : paths) {
+        for (File path : args.paths) {
             if (path.isDirectory()) {
-                List<File> files = new ArrayList<File>();
-                findClasses(path, files);
-                for (File file : files) {
-                    fromFile(file);
-                }
+                writeClasses(path);
             } else {
                 String fileName = path.getName();
-                if(fileName.endsWith(".jar")){
-                    fromJar(path);//support just top level jars for now. worried about recursive performance.
+                if (fileName.endsWith(".jar")) {
+                    writeJarClasses(path);
                 } else {
-                    fromFile(path);
+                    Class<?> klass = loadClassFromFile(path);
+                    if (klass != null) {
+                        writeClass(klass);
+                    }
                 }
             }
         }
     }
 
-    private void fromJar(File jarFile) throws IOException {
-        JarFile jar = new JarFile(jarFile);
-        Enumeration<JarEntry> entries = jar.entries();
-        while(entries.hasMoreElements()) {
-            JarEntry entry = entries.nextElement();
-            String fileName = entry.getName();
-            if (fileName.endsWith(".class")) {
-                int idx = fileName.lastIndexOf("/");
-                String path = fileName.substring(0, idx);
-                String className = fileName.substring(idx + 1, fileName.length());
-                File temp = new File(path, className);
-                File parentDir = temp.getParentFile();
-                if(!parentDir.exists()){
-                    parentDir.mkdirs();
-                    parentDir.deleteOnExit();
-                }
-                temp.deleteOnExit();
-                InputStream in = jar.getInputStream(entry);
-                FileOutputStream out = new FileOutputStream(temp);
-                byte[] buffer = new byte[1024];
-                int len;
-                while ((len = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, len);
-                }
-                out.close();
-                in.close();
-                Class<?> klass = loadClass(".", fileName.substring(0, fileName.length() - 6).replace('/', '.'));
-                if (klass != null) {
-                    writeClass(klass);
-                }
-            }
+    private void writeClass(Class<?> klass) throws IOException {
+        if (klass.getAnnotation(Path.class) != null) {
+            generator.generate(klass, OUTPUT_DIR);
         }
     }
 
-    private void findClasses(File dir, List<File> classes) {
+    private void writeClasses(File dir) throws IOException {
         File[] files = dir.listFiles(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
@@ -104,7 +109,12 @@ class CLI {
             }
         });
         if (files != null) {
-            Collections.addAll(classes, files);
+            for (File file : files) {
+                Class<?> klass = loadClassFromFile(file);
+                if (klass != null) {
+                    writeClass(klass);
+                }
+            }
         }
 
         File[] subDirs = dir.listFiles(new FileFilter() {
@@ -115,68 +125,89 @@ class CLI {
         });
         if (subDirs != null) {
             for (File subDir : subDirs) {
-                findClasses(subDir, classes);
+                writeClasses(subDir);
             }
         }
     }
 
-    private static final String[] COMMON_ROOT_PACKAGES = new String[]{"com", "net", "org", "io"};
+    private String lastPackageDir = null;
 
-    private void fromFile(File file) throws IOException {
-        String fileName = file.getName();
-        if (fileName.endsWith(".class")) {
+    //all this just to figure out the canonical class name...
+    private Class<?> loadClassFromFile(File file) throws MalformedURLException {
+        if (file.getName().endsWith(".class")) {
             String path = file.getPath();
-            Class<?> klass = null;
+            if (lastPackageDir != null) {
+                int idx = path.indexOf(lastPackageDir);
+                if (idx == 0) {
+                    Class<?> klass = loadClass(lastPackageDir, path.substring(lastPackageDir.length()));
+                    if (klass != null) {
+                        return klass;
+                    }
+                }
+            }
             //try to shortcut with common package roots
             for (String root : COMMON_ROOT_PACKAGES) {
                 int idx = path.indexOf(root);
                 if (idx > 0) {
                     String packageDir = path.substring(0, idx - 1);
                     String className = path.substring(idx, path.length() - 6).replace('/', '.');
-                    klass = loadClass(packageDir, className);
+                    Class<?> klass = loadClass(packageDir, className);
                     if (klass != null) {
-                        break;
+                        lastPackageDir = packageDir;
+                        return klass;
                     }
                 } else if (idx == 0) {
-                    klass = loadClass(".", path.substring(0, path.length() - 6).replace('/', '.'));
+                    Class<?> klass = loadClass(".", path.substring(0, path.length() - 6).replace('/', '.'));
                     if (klass != null) {
-                        break;
+                        lastPackageDir = ".";
+                        return klass;
                     }
                 }
             }
             //try to work backwards through the path
             int idx = path.lastIndexOf('/');
-            while (klass == null && idx > 0) {
-                String prefix = path.substring(0, idx);
+            while (idx > 0) {
+                String packageDir = path.substring(0, idx);
                 String className = path.substring(idx + 1, path.length() - 6).replace('/', '.');
-                klass = loadClass(prefix, className);
-                if (klass == null) {
+                Class<?> klass = loadClass(packageDir, className);
+                if (klass != null) {
+                    lastPackageDir = packageDir;
+                    return klass;
+                } else {
                     //try again
-                    idx = prefix.lastIndexOf('/');
+                    idx = packageDir.lastIndexOf('/');
                 }
             }
             //maybe we are at the package root
-            if (klass == null && idx < 0) {
-                klass = loadClass(".", path.substring(0, path.length() - 6).replace('/', '.'));
+            if (idx < 0) {
+                return loadClass(".", path.substring(0, path.length() - 6).replace('/', '.'));
             }
-            if (klass != null) {
-                writeClass(klass);
+        }
+        return null;
+    }
+
+    //support just top level jars for now. worried about recursive performance.
+    private void writeJarClasses(File jarFile) throws IOException {
+        JarFile jar = new JarFile(jarFile);
+        Enumeration<JarEntry> entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry entry = entries.nextElement();
+            String fileName = entry.getName();
+            if (fileName.endsWith(".class")) {
+                Class<?> klass = loadClass(jarFile, fileName.replace('/', '.').substring(0, fileName.length() - 6));
+                if (klass != null) {
+                    writeClass(klass);
+                }
             }
         }
     }
 
-
-    private void writeClass(Class<?> klass) throws IOException {
-        Path pathAnnotation = klass.getAnnotation(Path.class);
-        if (pathAnnotation != null) {
-            JavaFile javaFile = generator.generate(klass);
-            File newFile = new File("jaxrs-client-gen");
-            javaFile.writeTo(newFile);
-        }
+    private Class<?> loadClass(String directoryOrJarPath, String fullClassName) throws MalformedURLException {
+        return loadClass(new File(directoryOrJarPath), fullClassName);
     }
 
-    private Class<?> loadClass(String packageDir, String fullClassName) throws MalformedURLException {
-        URLClassLoader classLoader = new URLClassLoader(new URL[]{new File(packageDir).toURI().toURL()});
+    private Class<?> loadClass(File directoryOrJar, String fullClassName) throws MalformedURLException {
+        URLClassLoader classLoader = new URLClassLoader(new URL[]{directoryOrJar.toURI().toURL()}, parentLoader);
         try {
             return classLoader.loadClass(fullClassName);
         } catch (Throwable e) {

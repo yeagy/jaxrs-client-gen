@@ -15,11 +15,11 @@ apply plugin: 'java'
 apply plugin: 'io.codearte.nexus-staging'
 
 group = 'io.github.yeagy'
-version = '0.1.1'
+version = '0.2.0'
 
 sourceCompatibility = '1.6'
 
-project.capsule.version = '1.0.2'
+project.capsule.version = '1.0.3'
 
 repositories {
     mavenLocal()

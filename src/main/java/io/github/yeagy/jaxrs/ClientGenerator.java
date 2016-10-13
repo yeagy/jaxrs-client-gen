@@ -15,6 +15,8 @@ import javax.ws.rs.core.Form;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.Response;
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -47,9 +49,15 @@ public class ClientGenerator {
      * Generate a JAX-RS resource client via JavaPoet
      *
      * @param klass JAX-RS resource
-     * @return JavaPoet java source object
+     * @param outDir directory to write source file to
+     * @throws IOException error writing to output dir
      */
-    public JavaFile generate(Class klass) {
+    public void generate(Class klass, File outDir) throws IOException {
+        JavaFile generate = generate(klass);
+        generate.writeTo(outDir);
+    }
+
+    JavaFile generate(Class klass) {
         ClassData classData = new ResourceAnalyzer().analyze(klass);
         FieldSpec base = FieldSpec.builder(WebTarget.class, L_BASE, Modifier.PRIVATE, Modifier.FINAL).build();
 

@@ -7,7 +7,7 @@ import javax.ws.rs.core.Response;
 import java.util.List;
 import java.util.Set;
 
-@Path("example")
+@Path("/example/")
 @Produces("application/json")
 @Consumes("application/json")
 public interface ExampleEndpoint {
@@ -32,7 +32,7 @@ public interface ExampleEndpoint {
     void delete(@PathParam("exampleKey") String exampleKey);
 
     @GET
-    @Path("{exampleKey}/text/{subKey}")
+    @Path("/{exampleKey}/text/{subKey}/")
     Example findKitchenSink(@PathParam("exampleKey") String exampleKey,
                             @HeaderParam("headParam") String headParam,
                             @QueryParam("modParam") String modParam,

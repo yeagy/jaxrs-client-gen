@@ -226,7 +226,7 @@ public class ClientGenerator {
                 } else {
                     throw new IllegalStateException("path param mismatch: " + trimmed);
                 }
-            } else {
+            } else if (!part.isEmpty()){
                 statement.append(String.format(".path(\"%s\")\n", part));
             }
         }

@@ -21,6 +21,17 @@ public class ClientGeneratorTest {
     }
 
     @Test
+    public void testAsyncFromInterface() throws Exception {
+        JavaFile file = new ClientGenerator(true).generate(ExampleEndpoint.class);
+//        file.writeTo(System.out);
+
+        String control = new Scanner(new File("src/test/java/io/github/yeagy/jaxrs/ExampleEndpointAsyncClient.java")).useDelimiter("\\Z").next();
+        String content = file.toString().trim();
+
+        Assert.assertEquals(control, content);
+    }
+
+    @Test
     public void testFromClass() throws Exception {
         JavaFile file = new ClientGenerator().generate(ExampleClassEndpoint.class);
 //        file.writeTo(System.out);

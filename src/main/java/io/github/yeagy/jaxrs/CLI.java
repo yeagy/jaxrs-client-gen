@@ -1,6 +1,7 @@
 package io.github.yeagy.jaxrs;
 
 import org.kohsuke.args4j.Argument;
+import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -20,13 +21,16 @@ import java.util.jar.JarFile;
 
 class CLI {
     private static class Args {
-        @Option(name = "-async", usage = "Create an asynchronous client from a class resource")
+        @Option(name = "--help", aliases = "-h", usage = "Show this message.")
+        private boolean help = false;
+
+        @Option(name = "--async", aliases = "-a", usage = "Create an asynchronous client from a class resource.")
         private boolean async = false;
 
-        @Option(name = "-cp", usage = "Semicolon separated classpath entries. Same rules as java. Can be a directory, jar, or wildcard for dir of jars (not recursively searched).")
+        @Option(name = "--parent-classpath", aliases = "-pcp", metaVar = "CPATH;...", usage = "Dependent libraries. Semicolon separated classpath entries, same rules as java. Can be a directory, jar, or wildcard for dir of jars (not recursively searched).")
         private String classpath = null;
 
-        @Argument(required = true, usage = "Space separated paths. Can be a class file, a jar, or a directory (recursively searched).")
+        @Argument(required = true, metaVar = "PATH", usage = "Space separated paths. Can be a class file, a jar, or a directory (recursively searched).")
         private List<File> paths = new ArrayList<File>();
     }
 
@@ -72,9 +76,28 @@ class CLI {
     public static void main(String[] input) throws Exception {
         Args args = new Args();
         CmdLineParser parser = new CmdLineParser(args);
-        parser.parseArgument(input);
+        try {
+            parser.parseArgument(input);
+        } catch (CmdLineException e) {
+            if (!args.help) {
+                System.err.println(e.getMessage());
+            }
+            printHelp(parser);
+            System.exit(1);
+        }
+        if (args.help) {
+            printHelp(parser);
+            System.exit(0);
+        }
+
         CLI cli = new CLI(args);
         cli.generate();
+    }
+
+    private static void printHelp(CmdLineParser parser) {
+        parser.printSingleLineUsage(System.err);
+        System.err.println("\n");
+        parser.printUsage(System.err);
     }
 
     private void generate() throws ClassNotFoundException, IOException {

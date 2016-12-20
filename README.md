@@ -11,25 +11,26 @@ Handles both classes and interfaces with JAX-RS resource annotations. Class deri
 <dependency>
   <groupId>io.github.yeagy</groupId>
   <artifactId>jaxrs-client-gen</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
 </dependency>
 ```
 
 #####Usage
 To use from the command line, use the *-capsule.jar, which is executable:
 ```bash
-java -jar <capsule jar> [-async] [<dir>|<filename>]+
+java -jar <capsule jar> [options] [<dir>|<filename>]+
 ```
-The -async flag will generate asynchronous clients from class resources.<br>
+The --async (-a) flag will generate **asynchronous** clients from resources.<br>
+The --parent-classpath (-pcp) option takes a semicolon separated list of dependencies your clients require<br>
 A directory will be created named 'jaxrs-client-gen' which will contain all the generated sources.
 
 Here is an example that will generate sources from the test classes of this project:
 ```bash
-java -jar build/libs/jaxrs-client-gen-0.2.1-capsule.jar -async build/classes/test
+java -jar build/libs/jaxrs-client-gen-0.2.2-capsule.jar build/classes/test
 ```
 On UNIX like systems the jar is self-executing:
 ```bash
-build/libs/jaxrs-client-gen-0.2.1-capsule.jar -async build/classes/test
+build/libs/jaxrs-client-gen-0.2.2-capsule.jar build/classes/test
 ```
 Afterwards you can copy the generated sources into your source tree:
 ```bash

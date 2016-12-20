@@ -68,13 +68,13 @@ public class ClientGenerator {
                 .addStatement("$L = $L.target($L)", L_BASE, L_CLIENT, L_ENDPOINT_URL)
                 .build();
 
-        String classNameSuffix = async && !classData.iface ? "AsyncClient" : "Client";
+        String classNameSuffix = async ? "AsyncClient" : "Client";
         TypeSpec.Builder typeSpecBuilder = TypeSpec.classBuilder(classData.className + classNameSuffix)
                 .addModifiers(Modifier.PUBLIC)
                 .addField(base)
                 .addMethod(constructor);
 
-        if (classData.iface) {
+        if (classData.iface && !async) {
             typeSpecBuilder.addSuperinterface(klass);
         }
 
@@ -82,13 +82,13 @@ public class ClientGenerator {
             MethodSpec.Builder builder = MethodSpec.methodBuilder(methodData.methodName)
                     .addModifiers(Modifier.PUBLIC);
 
-            if (async && !classData.iface && methodData.verb != null) {
+            if (async && methodData.verb != null && methodData.returnType != void.class) {
                 builder.returns(ParameterizedTypeName.get(Future.class, methodData.returnType));
             } else {
                 builder.returns(methodData.returnType);
             }
 
-            if (classData.iface) {
+            if (classData.iface && !async) {
                 builder.addAnnotation(Override.class);
             }
 
@@ -118,7 +118,7 @@ public class ClientGenerator {
                 StringBuilder requestParams = new StringBuilder(".request($L)\n");
                 params(builder, classData.params, statement, requestParams, classData.iface);
                 params(builder, methodData.params, statement, requestParams, classData.iface);
-                if (async && !classData.iface) {
+                if (async) {
                     requestParams.append(".async()\n");
                 }
                 statement.append(requestParams);
